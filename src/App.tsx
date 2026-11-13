@@ -1,20 +1,63 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
 import { Plus, Circle, CheckCircle2, ShoppingBag, Loader2 } from 'lucide-react';
 
 // REPLACE THIS with your deployed Google Apps Script Web App URL
 const GOOGLE_SHEETS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwfCdVbzvN04RPoRmZ0LGDy6SNpJh6lqHMBU04QhOXuKu6FqA57ZZDYJSLeuPvqS9Pi/exec';
 
-export default function SharedGroceryList() {
-  const [items, setItems] = useState([]);
+export interface GroceryItem {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
+function App() {
+  const [items, setItems] = useState<GroceryItem[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(true);
 
+  // Load items when the app opens
+  useEffect(() => {
+    let ignore = false;
 
-  const handleAddItem = async (e) => {
+    const fetchInitialItems = async () => {
+      try {
+        const response = await fetch(GOOGLE_SHEETS_WEB_APP_URL);
+        if (response.ok) {
+          const data = await response.json();
+          if (!ignore && Array.isArray(data)) {
+            setItems(data);
+            return;
+          }
+        }
+        throw new Error('Could not parse items array from endpoint');
+      } catch (error) {
+        console.warn("Could not load from Google Sheets, using default list:", error);
+        if (!ignore) {
+          setItems([
+            { id: '1', text: 'Milk', checked: false },
+            { id: '2', text: 'Eggs', checked: false },
+            { id: '3', text: 'Apples', checked: true },
+          ]);
+        }
+      } finally {
+        if (!ignore) {
+          setIsSyncing(false);
+        }
+      }
+    };
+
+    void fetchInitialItems();
+
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const handleAddItem = async (e: FormEvent) => {
     e.preventDefault();
     if (!inputValue.trim()) return;
 
-    const newItem = {
+    const newItem: GroceryItem = {
       id: Date.now().toString(),
       text: inputValue.trim(),
       checked: false
@@ -26,17 +69,13 @@ export default function SharedGroceryList() {
     setIsSyncing(true);
 
     try {
-      // ==========================================
-      // REAL GOOGLE SHEETS INTEGRATION (POST - ADD)
-      // ==========================================
+      // Real Google Sheets integration (POST - ADD)
       await fetch(GOOGLE_SHEETS_WEB_APP_URL, {
         method: 'POST',
-        // using no-cors or standard depending on your Apps Script setup
         body: JSON.stringify({ action: 'add', item: newItem })
       });
-      
-      // --- MOCK DELAY FOR NOW ---
-      await new Promise(resolve => setTimeout(resolve, 500));
+      // Short delay for UI feel
+      await new Promise(resolve => setTimeout(resolve, 400));
     } catch (error) {
       console.error("Error adding item:", error);
     } finally {
@@ -44,27 +83,23 @@ export default function SharedGroceryList() {
     }
   };
 
-  const handleToggle = async (id) => {
+  const handleToggle = async (id: string) => {
     const itemToToggle = items.find(i => i.id === id);
     if (!itemToToggle) return;
 
-    const updatedItem = { ...itemToToggle, checked: !itemToToggle.checked };
+    const updatedItem: GroceryItem = { ...itemToToggle, checked: !itemToToggle.checked };
 
     // Optimistic UI update: instantly toggle on the screen
     setItems(prev => prev.map(i => i.id === id ? updatedItem : i));
     setIsSyncing(true);
 
     try {
-      // ==========================================
-      // REAL GOOGLE SHEETS INTEGRATION (POST - UPDATE)
-      // ==========================================
+      // Real Google Sheets integration (POST - UPDATE)
       await fetch(GOOGLE_SHEETS_WEB_APP_URL, {
         method: 'POST',
         body: JSON.stringify({ action: 'update', item: updatedItem })
       });
-      
-      // --- MOCK DELAY FOR NOW ---
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 400));
     } catch (error) {
       console.error("Error updating item:", error);
     } finally {
@@ -87,8 +122,8 @@ export default function SharedGroceryList() {
             <h1 className="text-2xl font-bold text-slate-900">Our Groceries</h1>
           </div>
           {isSyncing && (
-            <div className="flex items-center text-xs text-slate-400 space-x-1 bg-slate-200/50 px-2 py-1 rounded-full">
-              <Loader2 size={14} className="animate-spin" />
+            <div className="flex items-center text-xs text-slate-500 space-x-1 bg-slate-200/60 px-2.5 py-1 rounded-full">
+              <Loader2 size={14} className="animate-spin text-indigo-600" />
               <span>Syncing</span>
             </div>
           )}
@@ -106,6 +141,7 @@ export default function SharedGroceryList() {
           <button
             type="submit"
             disabled={!inputValue.trim()}
+            aria-label="Add item"
             className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center shrink-0"
           >
             <Plus size={24} />
@@ -175,3 +211,5 @@ export default function SharedGroceryList() {
     </div>
   );
 }
+
+export default App;
