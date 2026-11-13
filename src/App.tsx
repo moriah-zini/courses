@@ -1,5 +1,5 @@
-import { useState, useEffect, type FormEvent } from 'react';
-import { Plus, Circle, CheckCircle2, ShoppingBag, Loader2 } from 'lucide-react';
+import { useState, useEffect, type FormEvent, type MouseEvent } from 'react';
+import { Plus, Circle, CheckCircle2, ShoppingBag, Loader2, Trash2 } from 'lucide-react';
 
 // REPLACE THIS with your deployed Google Apps Script Web App URL
 const GOOGLE_SHEETS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwfCdVbzvN04RPoRmZ0LGDy6SNpJh6lqHMBU04QhOXuKu6FqA57ZZDYJSLeuPvqS9Pi/exec';
@@ -23,7 +23,8 @@ function App() {
       try {
         const response = await fetch(GOOGLE_SHEETS_WEB_APP_URL);
         if (response.ok) {
-          const data = await response.json();
+          const text = await response.text();
+          const data = JSON.parse(text);
           if (!ignore && Array.isArray(data)) {
             setItems(data);
             return;
@@ -70,12 +71,16 @@ function App() {
 
     try {
       // Real Google Sheets integration (POST - ADD)
+      // Using mode: 'no-cors' prevents browser CORS preflight blocking with Google Apps Script
       await fetch(GOOGLE_SHEETS_WEB_APP_URL, {
         method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
         body: JSON.stringify({ action: 'add', item: newItem })
       });
-      // Short delay for UI feel
-      await new Promise(resolve => setTimeout(resolve, 400));
+      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error("Error adding item:", error);
     } finally {
@@ -97,11 +102,42 @@ function App() {
       // Real Google Sheets integration (POST - UPDATE)
       await fetch(GOOGLE_SHEETS_WEB_APP_URL, {
         method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
         body: JSON.stringify({ action: 'update', item: updatedItem })
       });
-      await new Promise(resolve => setTimeout(resolve, 400));
+      await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error("Error updating item:", error);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDeleteItem = async (id: string, e?: MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+    }
+
+    // Optimistic UI update: instantly remove from screen
+    setItems(prev => prev.filter(i => i.id !== id));
+    setIsSyncing(true);
+
+    try {
+      // Real Google Sheets integration (POST - DELETE)
+      await fetch(GOOGLE_SHEETS_WEB_APP_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'text/plain;charset=utf-8',
+        },
+        body: JSON.stringify({ action: 'delete', id: id, item: { id } })
+      });
+      await new Promise(resolve => setTimeout(resolve, 300));
+    } catch (error) {
+      console.error("Error deleting item:", error);
     } finally {
       setIsSyncing(false);
     }
@@ -142,7 +178,7 @@ function App() {
             type="submit"
             disabled={!inputValue.trim()}
             aria-label="Add item"
-            className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center shrink-0"
+            className="bg-indigo-600 hover:bg-indigo-700 text-white p-3 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center justify-center shrink-0 cursor-pointer"
           >
             <Plus size={24} />
           </button>
@@ -166,15 +202,24 @@ function App() {
                 {uncheckedItems.map(item => (
                   <li 
                     key={item.id}
-                    className="flex items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors cursor-pointer"
+                    className="group flex items-center p-3 bg-white rounded-xl border border-slate-100 shadow-sm hover:border-indigo-200 transition-colors cursor-pointer"
                     onClick={() => handleToggle(item.id)}
                   >
-                    <div className="text-slate-300 mr-4">
+                    <div className="text-slate-300 group-hover:text-indigo-400 mr-4 transition-colors">
                       <Circle size={24} />
                     </div>
                     <span className="text-slate-800 font-medium text-lg flex-1">
                       {item.text}
                     </span>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${item.text}`}
+                      onClick={(e) => handleDeleteItem(item.id, e)}
+                      className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 p-2 rounded-lg transition-colors"
+                      title="Delete item"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -191,7 +236,7 @@ function App() {
                 {checkedItems.map(item => (
                   <li 
                     key={item.id}
-                    className="flex items-center p-3 bg-slate-100/50 rounded-xl border border-slate-100 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
+                    className="group flex items-center p-3 bg-slate-100/50 rounded-xl border border-slate-100 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
                     onClick={() => handleToggle(item.id)}
                   >
                     <div className="text-emerald-500 mr-4">
@@ -200,6 +245,15 @@ function App() {
                     <span className="text-slate-500 line-through text-lg flex-1">
                       {item.text}
                     </span>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${item.text}`}
+                      onClick={(e) => handleDeleteItem(item.id, e)}
+                      className="text-slate-300 hover:text-rose-600 hover:bg-rose-50 p-2 rounded-lg transition-colors"
+                      title="Delete item"
+                    >
+                      <Trash2 size={18} />
+                    </button>
                   </li>
                 ))}
               </ul>
