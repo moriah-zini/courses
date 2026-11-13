@@ -9,36 +9,6 @@ export default function SharedGroceryList() {
   const [inputValue, setInputValue] = useState('');
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Load items when the app opens
-  useEffect(() => {
-    loadItems();
-  }, []);
-
-  const loadItems = async () => {
-    setIsSyncing(true);
-    try {
-      // ==========================================
-      // REAL GOOGLE SHEETS INTEGRATION (GET)
-      // ==========================================
-      const response = await fetch(GOOGLE_SHEETS_WEB_APP_URL);
-      const data = await response.json();
-      setItems(data);
-      
-      // --- MOCK DATA FOR NOW ---
-      setTimeout(() => {
-        setItems([
-          { id: '1', text: 'Milk', checked: false },
-          { id: '2', text: 'Eggs', checked: false },
-          { id: '3', text: 'Apples', checked: true },
-        ]);
-        setIsSyncing(false);
-      }, 800);
-      
-    } catch (error) {
-      console.error("Error loading items:", error);
-      setIsSyncing(false);
-    }
-  };
 
   const handleAddItem = async (e) => {
     e.preventDefault();
